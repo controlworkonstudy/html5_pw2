@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width">
+    <title>Geolocation and Storage</title>
+    <link rel="shortcut icon" type="image/png" href="https://img.icons8.com/emoji/32/cherry-blossom.png">
+    <style>
+        body {
+            background: #202124;
+            color: #bdc1c6;
+            font-family: Open Sans, Noto Sans, Roboto;
+            margin: auto;
+            padding-top: 20px;
+            width: 70%;
+        }
+
+        a {
+            cursor: pointer;
+        }
+
+        ul {
+            padding-left: 5px;
+        }
+
+        li {
+            padding-bottom: 5px;
+            list-style: none;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Geolocation and Storage</h1>
+    <button onclick="identifyLocation()">Identify the location</button>
+    <input type="text" id="comment">
+    <button onclick="writeToLocalStorage()">Write to LocalStorage</button>
+    <button onclick="readLocalStorage()">Read LocalStorage</button>
+
+    <button onclick="writeToDB()">Write to DataBase</button>
+    <button onclick="readDB()">Read DataBase</button>
+    <h2>Location</h2>
+    <div id="geo"></div>
+    <h2>LocalStorage</h2>
+    <ul id="ls"></ul>
+    <h2>DataBase</h2>
+    <ul id="db"></ul>
+    <script src="https://cdn.jsdelivr.net/npm/idb@7/build/umd.js"></script>
+    <script>
+        let coords = {};
+        let db;
+        initDB();
+
+        async function initDB() {
+            db = await idb.openDB('location_db', 1, {
+                upgrade(db, oldVersion, newVersion, transaction, event) {
+                    db.createObjectStore('location', { keyPath: 'title' });
+                },
+                blocked(currentVersion, blockedVersion, event) { },
+                blocking(currentVersion, blockedVersion, event) { },
+                terminated() { },
+            });
+        }
+
+        async function readDB() {
+            const arr = await db.getAll('location');
+            document.getElementById("db").innerHTML = arr.map(location => `<li>${location.title} ${location.coords}</li>`).join('');
+        }
+
+        async function writeToDB() {
+            let store = db.transaction('location', 'readwrite').objectStore('location');
+            try {
+                await store.put({ title: comment.value, coords: JSON.stringify(coords) });
+            } catch (err) {
+                if (err.name == 'ConstraintError') {
+                    alert("Such an object already exists");
+                    await writeToDB();
+                } else {
+                    throw err;
+                }
+            }
+        }
+
+        window.addEventListener('unhandledrejection', event => {
+            alert("Exception: " + event.reason.message);
+        });
+
+        const ls = document.getElementById("ls");
+        function readLocalStorage() {
+            ls.innerHTML = ''
+            for (const k in localStorage) {
+                if (!Object.hasOwnProperty.call(localStorage, k)) {
+                    continue
+                }
+                const v = localStorage[k]
+                ls.insertAdjacentHTML('afterbegin', `<li>${k}  ${v}</li>`);
+            }
+        }
+
+        const comment = document.getElementById("comment");
+        function writeToLocalStorage() {
+            localStorage.setItem(comment.value, JSON.stringify(coords))
+        }
+
+        const geo = document.getElementById("geo");
+        function identifyLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(gotPosition, gotException);
+            } else {
+                geo.innerHTML = "Geolocation is not supported by this browser.";
+            }
+        }
+
+        function gotPosition(position) {
+            coords.latitude = position.coords.latitude;
+            coords.longitude = position.coords.longitude;
+            geo.innerHTML = "Latitude: " + position.coords.latitude +
+                "<br>Longitude: " + position.coords.longitude;
+        }
+
+        function gotException(exp) {
+            switch (exp.code) {
+                case exp.PERMISSION_DENIED:
+                    geo.innerHTML = "User denied the request for Geolocation."
+                    break;
+                case exp.POSITION_UNAVAILABLE:
+                    geo.innerHTML = "Location information is unavailable."
+                    break;
+                case exp.TIMEOUT:
+                    geo.innerHTML = "The request to get user location timed out."
+                    break;
+                case exp.UNKNOWN_ERROR:
+                    geo.innerHTML = "An unknown error occurred."
+                    break;
+            }
+        }
+    </script>
+</body>
+
+</html>
